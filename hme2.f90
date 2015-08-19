@@ -256,6 +256,7 @@ if(allocated(iskilledsite))deallocate(iskilledsite)
 allocate(iskilledsite(natom))
 iskilledsite=0
 
+espfitted = 0.d0
 istep = 0
 if(level(1)<=0)then
   if(abs(qresidual)>1.D-4)then
