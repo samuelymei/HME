@@ -228,9 +228,9 @@ if(fitmethod/='RESP'.and.fitmethod/='DRESP')then
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,mpinit,dpinit,qpinit,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'    Statistics of the initial multipoles:'
-  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
-  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
-  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)      ', sstot
+  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)     ', ssres
+  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
   write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
   write(outid,'(A,F10.5)')'  Correlation coefficient                  ', 1.d0-ssres/sstot
   write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
@@ -257,6 +257,9 @@ allocate(iskilledsite(natom))
 iskilledsite=0
 
 espfitted = 0.d0
+monopoleout=0.d0
+dipoleout=0.d0
+quadrupoleout=0.d0
 istep = 0
 if(level(1)<=0)then
   if(abs(qresidual)>1.D-4)then
@@ -287,9 +290,6 @@ else
   if(allocated(bcopy))deallocate(bcopy)
   allocate(bcopy(neffecsize))
   
-  monopoleout=0.d0
-  dipoleout=0.d0
-  quadrupoleout=0.d0
   q0=mpinit-qbase
   isconverged=.false.
   icycle=0
@@ -380,9 +380,9 @@ else
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=0):'
-  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
-  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
-  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)      ', sstot
+  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)     ', ssres
+  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
   write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
   write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot)', 1.d0-ssres/sstot
   write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
@@ -412,9 +412,9 @@ if(level(2)>0)then
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=1):'
-  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
-  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
-  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)      ', sstot
+  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)     ', ssres
+  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
   write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
   write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot)', 1.d0-ssres/sstot
   write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
@@ -441,9 +441,9 @@ if(level(3)>0)then
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=2):'
-  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)       ', sstot
-  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)      ', ssres
-  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N))  ', sqrt(ssres/ngrid)
+  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)       ', sstot
+  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)      ', ssres
+  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N))  ', sqrt(ssres/ngrid)
   write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))    ', sqrt(ssres/sstot)
   write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot) ', 1.d0-ssres/sstot
   write(outid,'(A,F10.5)')'  Cross correlation                         ', crosscorr
