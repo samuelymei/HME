@@ -138,7 +138,7 @@ interface
   integer(kind=4), allocatable, intent(out) :: lgnatomidx(:,:)
   real(kind=8), allocatable, intent(out) :: lgncons(:)
   real(kind=8), intent(in) :: qresidual
-  real(kind=8),intent(in) :: qbase(natom)
+  real(kind=8), intent(in) :: qbase(natom)
   integer(kind=4), intent(in) :: outid
   end subroutine getlgn
 
@@ -159,13 +159,13 @@ real(kind=8), intent(in out) :: mpinit(natom), dpinit(3,natom), qpinit(5,natom)
 character(len=*), intent(in) :: fitmethod0
 integer(kind=4), intent(in) :: istrnt
 real(kind=8), intent(in) :: strength
-integer(kind=4),intent(in) :: nlgn0
-integer(kind=4),intent(in) :: lgnatomidx0(natom,nlgn0)
-real(kind=8),intent(in) :: lgncons0(nlgn0)
-integer(kind=4),intent(in) :: nsymmconstraint
-integer(kind=4),intent(in out) :: isymmconstraintpair(2,nsymmconstraint)
-integer(kind=4),intent(in) :: outid
-real(kind=8),intent(out) :: ssres, crosscorr
+integer(kind=4), intent(in) :: nlgn0
+integer(kind=4), intent(in) :: lgnatomidx0(natom,nlgn0)
+real(kind=8), intent(in) :: lgncons0(nlgn0)
+integer(kind=4), intent(in) :: nsymmconstraint
+integer(kind=4), intent(in) :: isymmconstraintpair(2,nsymmconstraint)
+integer(kind=4), intent(in) :: outid
+real(kind=8), intent(out) :: ssres, crosscorr
 
 
 character(len=10)::fitmethod
@@ -173,7 +173,8 @@ real(kind=8) :: espfitted(ngrid), espresidual(ngrid)
 integer(kind=4) :: nlgn
 integer(kind=4), allocatable :: lgnatomidx(:,:)
 real(kind=8), allocatable :: lgncons(:)
-real(kind=8), allocatable :: q(:)
+integer(kind=4) :: isymmconstraintpairlocal(2,nsymmconstraint)
+real(kind=8), allocatable :: q(:), qcopy(:)
 real(kind=8), allocatable :: awork(:,:), bwork(:)
 real(kind=8), allocatable :: acopy(:,:), bcopy(:)
 real(kind=8) :: q0(natom), qbase(natom), qresidual
@@ -187,7 +188,9 @@ logical :: isconverged
 integer(kind=4) :: istep
 integer(kind=4) :: icycle
 real(kind=8), parameter :: criterion=1.d-4
-integer(kind=4),allocatable::iskilledsite(:)          ! some charge sites are not freely variable due to the existence of constraints
+integer(kind=4),allocatable :: iskilledsite(:)          ! some charge sites are not freely variable due to the existence of constraints
+integer(kind=4) :: deallocatestatus
+integer(kind=4) :: AllocateStatus
 integer(kind=4) :: i, j, k, m, n
 
 fitmethod=trim(adjustl(fitmethod0))
@@ -228,9 +231,9 @@ if(fitmethod/='RESP'.and.fitmethod/='DRESP')then
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,mpinit,dpinit,qpinit,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'    Statistics of the initial multipoles:'
-  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)      ', sstot
-  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)     ', ssres
-  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
+  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
+  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
   write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
   write(outid,'(A,F10.5)')'  Correlation coefficient                  ', 1.d0-ssres/sstot
   write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
@@ -241,9 +244,22 @@ end if
 call gendismat(natom,ngrid,atomcrd,gridcrd,r_atm_grid,r_atm_grid_vec,ibigmem,outid)
 
 ! initialize 
-if(allocated(qwt))deallocate(qwt)
-allocate(qwt(natom))
+if(allocated(qwt))then
+  deallocate(qwt,stat=deallocatestatus)
+  if(deallocatestatus/=0)then
+    write(outid,'(A)')'deallocating qwt failed. deallocatestatus=',deallocatestatus
+    stop
+  end if
+end if
+allocate(qwt(natom),stat=AllocateStatus)
+if(AllocateStatus/=0)then
+  write(outid,'(A)')'Failed when allocating qwt'
+  stop
+end if
+
+
 call initialize(natom,ngrid,gridcrd,atomcrd,espinit,espresidual,mpinit,qbase,qwt,r_atm_grid,ibigmem,fitmethod,outid)
+
 write(outid,'(A,I8)')' Total charge of this molecule:', qtot
 write(outid,'(A,F16.5)')' Sum of initial charge:', sum(mpinit)
 qresidual=qtot-sum(qbase)
@@ -252,14 +268,21 @@ if(fitmethod=='DRESP')then
 end if
 write(outid,*)
 
-if(allocated(iskilledsite))deallocate(iskilledsite)
-allocate(iskilledsite(natom))
+if(allocated(iskilledsite))then
+  deallocate(iskilledsite,stat=deallocatestatus)
+  if(deallocatestatus/=0)then
+    write(outid,'(A)')'deallocating iskilledsite failed. deallocatestatus=',deallocatestatus
+    stop
+  end if
+end if
+allocate(iskilledsite(natom),stat=AllocateStatus)
+if(AllocateStatus/=0)then
+  write(outid,'(A)')'Failed when allocating iskilledsite'
+  stop
+end if
 iskilledsite=0
 
 espfitted = 0.d0
-monopoleout=0.d0
-dipoleout=0.d0
-quadrupoleout=0.d0
 istep = 0
 if(level(1)<=0)then
   if(abs(qresidual)>1.D-4)then
@@ -273,23 +296,95 @@ else
   ! get info for Lagrange multiplier
   call getlgn(natom,nlgn0,lgnatomidx0,lgncons0,nlgn,lgnatomidx,lgncons,qresidual,qbase,outid)
   
+  isymmconstraintpairlocal=isymmconstraintpair
   write(outid,'(A,I5)')' Total number of symmetry constraints:',nsymmconstraint
   do i = 1, nsymmconstraint
-    write(outid,'(2I3)')isymmconstraintpair(:,i)
+    write(outid,'(2I3)')isymmconstraintpairlocal(:,i)
   end do
   write(outid,*)
-  if(allocated(awork))deallocate(awork)
-  allocate(awork(natom+nlgn,natom+nlgn))
-  if(allocated(bwork))deallocate(bwork)
-  allocate(bwork(natom+nlgn))
-  if(allocated(q))deallocate(q)
-  allocate(q(natom))
-  neffecsize=natom+nlgn-nsymmconstraint
-  if(allocated(acopy))deallocate(acopy)
-  allocate(acopy(neffecsize,neffecsize))
-  if(allocated(bcopy))deallocate(bcopy)
-  allocate(bcopy(neffecsize))
+
+  if(allocated(awork))then
+    deallocate(awork,stat=deallocatestatus)
+    if(deallocatestatus/=0)then
+      write(outid,'(A)')'deallocating awork failed. deallocatestatus=',deallocatestatus
+      stop
+    end if
+  end if
+  allocate(awork(natom+nlgn,natom+nlgn),stat=AllocateStatus)
+  if(AllocateStatus/=0)then
+    write(outid,'(A)')'Failed when allocating awork'
+    stop
+  end if
   
+  if(allocated(bwork))then
+    deallocate(bwork,stat=deallocatestatus)
+    if(deallocatestatus/=0)then
+      write(outid,'(A)')'deallocating bwork failed. deallocatestatus=',deallocatestatus
+      stop
+    end if
+  end if
+  allocate(bwork(natom+nlgn),stat=AllocateStatus)
+  if(AllocateStatus/=0)then
+    write(outid,'(A)')'Failed when allocating bwork'
+    stop
+  end if
+
+  if(allocated(q))then
+    deallocate(q,stat=deallocatestatus)
+    if(deallocatestatus/=0)then
+      write(outid,'(A)')'deallocating q failed. deallocatestatus=',deallocatestatus
+      stop
+    end if
+  end if
+  allocate(q(natom),stat=AllocateStatus)
+  if(AllocateStatus/=0)then
+    write(outid,'(A)')'Failed when allocating q'
+    stop
+  end if
+
+  neffecsize=natom+nlgn-nsymmconstraint
+  if(allocated(acopy))then
+    deallocate(acopy,stat=deallocatestatus)
+    if(deallocatestatus/=0)then
+      write(outid,'(A)')'deallocating acopy failed. deallocatestatus=',deallocatestatus
+      stop
+    end if
+  end if
+  allocate(acopy(neffecsize,neffecsize),stat=AllocateStatus)
+  if(AllocateStatus/=0)then
+    write(outid,'(A)')'Failed when allocating acopy'
+    stop
+  end if
+
+  if(allocated(bcopy))then
+    deallocate(bcopy,stat=deallocatestatus)
+    if(deallocatestatus/=0)then
+      write(outid,'(A)')'deallocating bcopy failed. deallocatestatus=',deallocatestatus
+      stop
+    end if
+  end if
+  allocate(bcopy(neffecsize),stat=AllocateStatus)
+  if(AllocateStatus/=0)then
+    write(outid,'(A)')'Failed when allocating bcopy'
+    stop
+  end if
+
+  if(allocated(qcopy))then
+    deallocate(qcopy,stat=deallocatestatus)
+    if(deallocatestatus/=0)then
+      write(outid,'(A)')'deallocating bcopy failed. deallocatestatus=',deallocatestatus
+      stop
+    end if
+  end if
+  allocate(qcopy(neffecsize),stat=AllocateStatus)
+  if(AllocateStatus/=0)then
+    write(outid,'(A)')'Failed when allocating qcopy'
+    stop
+  end if
+
+  monopoleout=0.d0
+  dipoleout=0.d0
+  quadrupoleout=0.d0
   q0=mpinit-qbase
   isconverged=.false.
   icycle=0
@@ -306,15 +401,14 @@ else
 !    write(outid,*)
     ! add Lagrange condition to least-square matrix
     call appendlgn2mat(natom,nlgn,awork,bwork,lgnatomidx,lgncons)
-    call sortsymmconstraint(nsymmconstraint,isymmconstraintpair)
-!    write(outid,'(A,I5)')' Total number of symmetry constraints:',nsymmconstraint
-!    do i = 1, nsymmconstraint
-!      write(outid,'(2I3)')isymmconstraintpair(:,i)
-!    end do
-!    write(outid,*)
 !  write(outid,'(<natom+nlgn>F10.5,2X,F10.4)')((awork(i,j),j=1,natom+nlgn),bwork(i),i=1,natom+nlgn)
 !  write(outid,*)
-    call applysymmetry(natom,nlgn,awork,bwork,nsymmconstraint,isymmconstraintpair,iskilledsite)
+
+    if(nsymmconstraint>0)then
+      call sortsymmconstraint(nsymmconstraint,isymmconstraintpairlocal)
+      call applysymmetry(natom,nlgn,awork,bwork,nsymmconstraint,isymmconstraintpair,iskilledsite)
+   end if
+
 !  write(outid,'(<natom+nlgn>F10.5,2X,F10.4)')((awork(i,j),j=1,natom+nlgn),bwork(i),i=1,natom+nlgn)
 !  write(outid,*)
 
@@ -348,12 +442,19 @@ else
 !    awork=acopy
 !    bwork=bcopy
     ! SVD fit of charges
-    call LESVD(neffecsize,neffecsize,acopy,bcopy,q,outid)
+    call LESVD(neffecsize,neffecsize,acopy,bcopy,qcopy,outid)
+!    call LELUD(neffecsize,neffecsize,acopy,bcopy,qcopy,outid)
 !    print*,'killed charge:'
 !    do i = 1, natom
 !      if(iskilledsite(i)>0)print*,i
 !    end do
-    call rebuildchargearray(natom,q,nsymmconstraint,isymmconstraintpair,iskilledsite)
+
+    do i = 1, min(natom,neffecsize)
+      q(i) = qcopy(i)
+    end do
+
+    call rebuildchargearray(natom,q,nsymmconstraint,isymmconstraintpairlocal,iskilledsite)
+
     forall(i=1:natom)
       monopoleout(i)=qbase(i)+q(i)
     end forall
@@ -363,8 +464,8 @@ else
     if(fitmethod=='DRESP')then
       write(outid,'(A)')' Fitted + initial monopoles'
       write(outid,'(8F10.6)')(monopoleout(i),i=1,natom)
+      write(outid,*)
     end if
-    write(outid,*)
   
     ! check if converged
     if(istrnt==1)then
@@ -376,17 +477,17 @@ else
       isconverged=.true.
     endif
   end do
-  
-  call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
-  call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
-  write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=0):'
-  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)      ', sstot
-  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)     ', ssres
-  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
-  write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
-  write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot)', 1.d0-ssres/sstot
-  write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
-  write(outid,*)
+! 
+! call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
+! call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
+! write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=0):'
+! write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
+! write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
+! write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+! write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
+! write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot)', 1.d0-ssres/sstot
+! write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
+! write(outid,*)
 end if
 
 
@@ -412,9 +513,9 @@ if(level(2)>0)then
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=1):'
-  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)      ', sstot
-  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)     ', ssres
-  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
+  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
+  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
   write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
   write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot)', 1.d0-ssres/sstot
   write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
@@ -441,12 +542,12 @@ if(level(3)>0)then
   call multipoleESP(ngrid,gridcrd,natom,atomcrd,monopoleout,dipoleout,quadrupoleout,espfitted)
   call qualitymetric(ngrid,espinit,espfitted,sstot,ssreg,ssres,crosscorr)
   write(outid,'(A)')'  Statistics of the fitted multipoles (up to L=2):'
-  write(outid,'(A,ES12.3)')'  The initial sum of squares (ssvpot)       ', sstot
-  write(outid,'(A,ES12.3)')'  The residual sum of squares (chipot)      ', ssres
-  write(outid,'(A,ES14.5)')'  The std err of estimate (sqrt(chipot/N))  ', sqrt(ssres/ngrid)
-  write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))    ', sqrt(ssres/sstot)
-  write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot) ', 1.d0-ssres/sstot
-  write(outid,'(A,F10.5)')'  Cross correlation                         ', crosscorr
+  write(outid,'(A,F10.3)')'  The initial sum of squares (ssvpot)      ', sstot
+  write(outid,'(A,F10.3)')'  The residual sum of squares (chipot)     ', ssres
+  write(outid,'(A,F10.5)')'  The std err of estimate (sqrt(chipot/N)) ', sqrt(ssres/ngrid)
+  write(outid,'(A,F10.5)')'  ESP relative RMS (SQRT(chipot/ssvpot))   ', sqrt(ssres/sstot)
+  write(outid,'(A,F10.5)')'  Correlation coefficient (1-chipot/ssvpot)', 1.d0-ssres/sstot
+  write(outid,'(A,F10.5)')'  Cross correlation                        ', crosscorr
   write(outid,*)
 end if
 
@@ -472,17 +573,18 @@ else if (level(2)==1) then
 else if (level(3)==1)then
   qpinit=quadrupoleout
 end if
-write(outid,'(A)')' HME done. Quiting.'
 
 if(allocated(awork))deallocate(awork)
 if(allocated(bwork))deallocate(bwork)
-if(allocated(acopy))deallocate(acopy)
+if(allocated(acopy))deallocate(acopy,STAT=deallocatestatus)
 if(allocated(bcopy))deallocate(bcopy)
+if(allocated(bcopy))deallocate(qcopy)
 if(allocated(q))deallocate(q)
 if(allocated(qwt))deallocate(qwt)
 if(allocated(lgnatomidx))deallocate(lgnatomidx)
 if(allocated(lgncons))deallocate(lgncons)
 if(allocated(r_atm_grid))deallocate(r_atm_grid)
+if(allocated(r_atm_grid_vec))deallocate(r_atm_grid_vec)
 end subroutine hme
 
 subroutine bldmatquadrupole(natom,atomcrd,ngrid,gridcrd,esp,rnorm,r,ibigmem,awork,bwork)
@@ -907,11 +1009,11 @@ end subroutine checkconvergence
 
 subroutine getrestraints(natom,nlgn,awork,bwork,istrnt,strength,q0,qwt)
 implicit none
-integer(kind=4),intent(in)::natom,nlgn
-real(kind=8),intent(inout)::awork(natom+nlgn,natom+nlgn),bwork(natom+nlgn)
-integer(kind=4),intent(in)::istrnt
-real(kind=8),intent(in)::strength
-real(kind=8),intent(in)::q0(natom),qwt(natom)
+integer(kind=4), intent(in)::natom,nlgn
+real(kind=8), intent(in out)::awork(natom+nlgn,natom+nlgn),bwork(natom+nlgn)
+integer(kind=4), intent(in)::istrnt
+real(kind=8), intent(in)::strength
+real(kind=8), intent(in)::q0(natom),qwt(natom)
 integer(kind=4)istrntlocal
 integer(kind=4)::i,j,k,m,n
 istrntlocal=istrnt
@@ -928,24 +1030,54 @@ else
 end if
 end subroutine getrestraints
 
+subroutine LELUD(m,n,a,b,x,outid)
+  implicit none
+  integer(kind=4), intent(in) :: m, n
+  real(kind=8), intent(in) :: a(m,n), b(m)
+  real(kind=8), intent(out) :: x(n)
+  integer(kind=4), intent(in) :: outid
+  real(kind=8) :: acopy(m,n), bcopy(m)
+  integer(kind=4) :: ipiv(n)
+  integer(kind=4) :: info
+  integer(kind=4) :: i
+  if(m<n) then
+    write(outid,'(A)')'The lower dimension (m) of a must be no smaller than the order of A (n)'
+    stop
+  end if
+  acopy = a
+  call dgetrf( m, n, acopy, m, ipiv, info )
+  if(info/=0)then
+    write(outid,'(A)') 'dgetrf failed'
+    stop
+  end if
+  bcopy = b
+  call dgetrs( 'N', n, 1, acopy, m, ipiv, bcopy, m, info )
+  if(info/=0)then
+    write(outid,'(A)') 'dgetrs failed'
+    stop
+  end if
+  forall(i=1:n)
+    x(i)=bcopy(i)
+  end forall
+end subroutine LELUD
 
 subroutine LESVD(m,n,a,b,x,outid)
 implicit none
-integer(kind=4),intent(in)::m,n
-real(kind=8),intent(in)::a(m,n),b(m)
-real(kind=8),intent(out)::x(n)
-integer(kind=4),intent(in)::outid
-integer(kind=4)::maxmn,minmn
-real(kind=8),allocatable::sigma(:),sigma_inv(:)
-real(kind=8)::u(m,m),vt(n,n)
-integer(kind=4)::ldu,ldvt
-integer(kind=4)::lwork
-real(kind=8),allocatable::work(:)
-integer(kind=4)::info
-real(kind=8)::utu(m,m),vvt(n,n),vs(n,m)
-real(kind=8),allocatable::vsut(:,:)
-real(kind=8)::acopy(m,n)
-integer(kind=4)::i,j,k
+integer(kind=4), intent(in) :: m, n
+real(kind=8), intent(in) :: a(m,n), b(m)
+real(kind=8), intent(out) :: x(n)
+integer(kind=4), intent(in) :: outid
+integer(kind=4) :: maxmn, minmn
+real(kind=8), allocatable :: sigma(:), sigma_inv(:)
+real(kind=8) :: u(m,m), vt(n,n)
+integer(kind=4) :: ldu, ldvt
+integer(kind=4) :: lwork
+real(kind=8), allocatable :: work(:)
+integer(kind=4) :: info
+real(kind=8) :: utu(m,m), vvt(n,n), vs(n,m)
+real(kind=8), allocatable :: vsut(:,:)
+real(kind=8) :: acopy(m,n)
+integer(kind=4) :: i, j, k
 maxmn=m
 if(n>m)maxmn=n
 minmn=m
@@ -1032,8 +1164,8 @@ end subroutine LESVD
 
 subroutine sortsymmconstraint(nsymmconstraint,isymmconstraintpair)
 implicit none
-integer(kind=4),intent(in)::nsymmconstraint
-integer(kind=4),intent(in out)::isymmconstraintpair(2,nsymmconstraint)
+integer(kind=4), intent(in)::nsymmconstraint
+integer(kind=4), intent(in out)::isymmconstraintpair(2,nsymmconstraint)
 real(kind=8)::isymmconstraintpair_sorted(2,nsymmconstraint)
 integer(kind=4)::lastsite(nsymmconstraint)
 integer(kind=4)::location(nsymmconstraint)
@@ -1199,7 +1331,7 @@ real(kind=8)::rik,rjk
 integer(kind=4)::i,j,k,m,n
 awork=0.d0
 bwork=0.d0
-if(ibigmem==1)then
+if(ibigmem>=1)then
   do i = 1, natom
     do j = i+1, natom
       do k = 1, ngrid
@@ -1230,10 +1362,6 @@ else
   end do
 end if
 end subroutine bldmatmonopole
-
-
-
-
 
 subroutine getlgn(natom,nlgn0,lgnatomidx0,lgncons0,nlgn,lgnatomidx,lgncons,qresidual,qbase,outid)
 implicit none
@@ -1274,9 +1402,6 @@ end do
 write(outid,*)
 end subroutine getlgn
 
-
-
-
 subroutine initialize(natom,ngrid,gridcrd,atomcrd,espinit,espresidual,mpinit,qbase,qwt,r_atm_grid,ibigmem,fitmethod,outid)
 implicit none
 integer(kind=4),intent(in)::natom,ngrid
@@ -1305,7 +1430,7 @@ if(fitmethod=='DRESP')then
   totalwt=1.d0/((sum(abs(mpinit(1:natom)))/natom)**2+machinezero)
   qwt=qwt/totalwt
 !  write(40,*)'Totalwt=',totalwt
-  if(ibigmem==1)then
+  if(ibigmem>=1)then
     ! r_atm_grid is available
     do i = 1, natom
       do j = 1, ngrid
