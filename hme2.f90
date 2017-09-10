@@ -113,8 +113,11 @@ implicit none
 !!    espinit(ngrid): Standard (QM) ESP on grids                                           !!
 !!    qtot : total charge                                                                  !!
 !!    mpinit(natom): Initial guess of monopole on sites, the fitted monopole on return     !!
+!!                 on output, the fitted monopole if level(1)=1                            !!
 !!    dpinit(natom): Initial guess of dipole on sites, the fitted dipole on return         !!
+!!                 on output, the fitted dipole if level(2)=1                              !!
 !!    qpinit(natom): Initial guess of quadrupole on sites, the fitted quadrupole on return !!
+!!                 on output, the fitted quadrupole if level(3)=1                          !!
 !!    fitmethod: Fitting method (RESP, DRESP, to be added)                                 !!
 !!    istrnt: restraint function (0: Harmonic; 1: hyperbolic                               !!
 !!    strength: strength of restraint                                                      !!
@@ -123,6 +126,7 @@ implicit none
 !!    lgncons0: constraint for each Lagrange constraints                                   !!
 !!    nsymmconstraint: number of symmetry constraints                                      !!
 !!    isymmconstraintpair: site pair in symmetry                                           !!
+!!  Output variables                                                                       !!
 !!    outid: file pipe for output                                                          !!
 !!    ssres: residual sum of squares                                                       !!
 !!    crosscorr: correlation between fitted and target ESP                                 !!
